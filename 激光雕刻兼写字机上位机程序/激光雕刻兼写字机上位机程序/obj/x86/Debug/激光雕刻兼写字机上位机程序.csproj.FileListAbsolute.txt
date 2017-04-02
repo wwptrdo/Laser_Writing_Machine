@@ -1,0 +1,16 @@
+F:\我的代码\C#\激光雕刻兼写字机上位机程序\激光雕刻兼写字机上位机程序\bin\Debug\激光雕刻兼写字机上位机程序.exe
+F:\我的代码\C#\激光雕刻兼写字机上位机程序\激光雕刻兼写字机上位机程序\bin\Debug\激光雕刻兼写字机上位机程序.pdb
+F:\我的代码\C#\激光雕刻兼写字机上位机程序\激光雕刻兼写字机上位机程序\obj\x86\Debug\激光雕刻兼写字机上位机程序.Properties.Resources.resources
+F:\我的代码\C#\激光雕刻兼写字机上位机程序\激光雕刻兼写字机上位机程序\obj\x86\Debug\激光雕刻兼写字机上位机程序.csproj.GenerateResource.Cache
+F:\我的代码\C#\激光雕刻兼写字机上位机程序\激光雕刻兼写字机上位机程序\obj\x86\Debug\激光雕刻兼写字机上位机程序.exe
+F:\我的代码\C#\激光雕刻兼写字机上位机程序\激光雕刻兼写字机上位机程序\obj\x86\Debug\激光雕刻兼写字机上位机程序.pdb
+F:\我的代码\C#\激光雕刻兼写字机上位机程序\激光雕刻兼写字机上位机程序\obj\x86\Debug\激光雕刻兼写字机上位机程序.csprojResolveAssemblyReference.cache
+F:\我的代码\C#\激光雕刻兼写字机上位机程序\激光雕刻兼写字机上位机程序\obj\x86\Debug\激光雕刻兼写字机上位机程序.programMain.resources
+E:\我的代码\C#\激光雕刻兼写字机上位机程序\激光雕刻兼写字机上位机程序\obj\x86\Debug\激光雕刻兼写字机上位机程序.exe
+E:\我的代码\C#\激光雕刻兼写字机上位机程序\激光雕刻兼写字机上位机程序\obj\x86\Debug\激光雕刻兼写字机上位机程序.pdb
+E:\我的代码\C#\激光雕刻兼写字机上位机程序\激光雕刻兼写字机上位机程序\bin\Debug\激光雕刻兼写字机上位机程序.exe
+E:\我的代码\C#\激光雕刻兼写字机上位机程序\激光雕刻兼写字机上位机程序\bin\Debug\激光雕刻兼写字机上位机程序.pdb
+E:\我的代码\C#\激光雕刻兼写字机上位机程序\激光雕刻兼写字机上位机程序\obj\x86\Debug\激光雕刻兼写字机上位机程序.csprojResolveAssemblyReference.cache
+E:\我的代码\C#\激光雕刻兼写字机上位机程序\激光雕刻兼写字机上位机程序\obj\x86\Debug\激光雕刻兼写字机上位机程序.programMain.resources
+E:\我的代码\C#\激光雕刻兼写字机上位机程序\激光雕刻兼写字机上位机程序\obj\x86\Debug\激光雕刻兼写字机上位机程序.Properties.Resources.resources
+E:\我的代码\C#\激光雕刻兼写字机上位机程序\激光雕刻兼写字机上位机程序\obj\x86\Debug\激光雕刻兼写字机上位机程序.csproj.GenerateResource.Cache

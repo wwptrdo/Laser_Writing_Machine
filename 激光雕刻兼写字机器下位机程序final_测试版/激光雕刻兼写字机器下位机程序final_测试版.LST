@@ -1,0 +1,1893 @@
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 1   
+
+
+C51 COMPILER V9.52.0.0, COMPILATION OF MODULE ____________________________FINAL_______
+OBJECT MODULE PLACED IN �����̼�д�ֻ�����λ������final_���԰�.OBJ
+COMPILER INVOKED BY: E:\keil\C51\BIN\C51.EXE �����̼�д�ֻ�����λ������final_���԰�.c BROWSE DEBUG OBJECTEXTEND
+
+line level    source
+
+   1          #include <reg52.h>
+   2          #include <math.h>
+   3          
+   4          double x0 = 0, y0 = 0;    //起点坐标。表示当前激光所处的位置（定义的是全局变量，
+             -有风险。如果定义局部变量，需要二级指针，复杂些）
+   5                                    //令当前的激光的位置为(0, 0)点, 单片机复位需要手动调节激�
+             -��位置到(0, 0)点  
+   6          
+   7          double a, b;                      //定义圆弧插补时的圆心（a, b）
+   8                                                                   
+   9          unsigned int Speed = 30;  //步进电机移动的速度, 初始化为30。 注意调速范围在delay函�
+             -�中设置(当前是1~300)
+  10          
+  11          double Length = 0.075;    //基本的步进长度（精度）, 设置为0.15mm(正好2拍), 为减少bug�
+             -�设定为一次运动2拍
+  12          
+  13          int moveFlag = 0;         //定义一个标志，判断是不是执行电机操作
+  14          
+  15          sbit Laser = P3^7;        //定义激光打开的针脚
+  16          
+  17          unsigned int xFlag = 7;   //标记X轴步进电机走到了第几拍, 初始值为第一拍
+  18          unsigned int yFlag = 6;   //标记Y轴步进电机走到了第几拍, 初始值为第一拍
+  19                             
+  20          sbit Xa = P1^0;
+  21          sbit Xa_ = P1^1;
+  22          sbit Xb = P1^2;
+  23          sbit Xb_ = P1^3;
+  24          
+  25          sbit Ya = P0^0;
+  26          sbit Ya_ = P0^1;
+  27          sbit Yb = P0^2;
+  28          sbit Yb_ = P0^3;
+  29          
+  30          
+  31          //串口的初始化 
+  32          void SerInit()
+  33          {       
+  34   1              //对串行口控制寄存器(SCON)进行设置   
+  35   1              SM0 = 0;           
+  36   1              SM1 = 1;    //使串行口工作在方式一 
+  37   1              REN = 1;    //允许接收数据  
+  38   1              
+  39   1              //对T1定时器设置
+  40   1              TMOD = 0x20;  //T1的工作在方式二（对TMOD寄存器设置）        
+  41   1              TH1 = 0xfd;
+  42   1              TL1 = 0xfd;   //设定比特率为9600
+  43   1              TR1 = 1;      //启动定时器T1       
+  44   1      }
+  45          
+  46          
+  47          void delay() //步进电机调速
+  48          {       
+  49   1              unsigned int x, j;       //脉冲频率中的延时函数中的变量
+  50   1              for(j = 250; j >= Speed; j--)   //设置调速范围，请设置j变量
+  51   1                      for(x = 0; x <= 114; x++);      
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 2   
+
+  52   1      }
+  53          //控制X轴正转
+  54          void xPositiveTurn(double length)
+  55          {
+  56   1              while (1)
+  57   1              {
+  58   2                      switch (xFlag)
+  59   2                      {
+  60   3                              case 1:
+  61   3                                         Xa = 1; Xa_ = 0; Xb = 0; Xb_ = 0; //第一拍
+  62   3                                         length = length - 0.075;
+  63   3                                         xFlag = 2;
+  64   3                                         delay();
+  65   3                                         if (length <= 0)
+  66   3                                         {
+  67   4                                                 //Xa = 0;
+  68   4                                                 return;
+  69   4                                         }
+  70   3                                         break;
+  71   3                              case 2:    
+  72   3                                              Xa = 1; Xa_ = 0; Xb = 1; Xb_ = 0; //第二拍
+  73   3                                              length = length - 0.075;
+  74   3                                              xFlag = 3;
+  75   3                                              delay();
+  76   3                                              if (length <= 0)
+  77   3                                              {
+  78   4                                                      //Xa = 0; Xb = 0;
+  79   4                                                  return;
+  80   4                                              }
+  81   3                                              break;
+  82   3                               case 3:
+  83   3                                              Xa = 0; Xa_ = 0; Xb = 1; Xb_ = 0; //第三拍
+  84   3                                              length = length - 0.075;
+  85   3                                              xFlag = 4;
+  86   3                                              delay();
+  87   3                                              if (length <= 0)
+  88   3                                              {
+  89   4                                                      //Xb = 0;
+  90   4                                                  return;
+  91   4                                              }
+  92   3                                              break;
+  93   3                               case 4:
+  94   3                                              Xa = 0; Xa_ = 1; Xb = 1; Xb_ = 0; //第四拍
+  95   3                                              length = length - 0.075;
+  96   3                                              xFlag = 5;
+  97   3                                              delay();
+  98   3                                              if (length <= 0)
+  99   3                                              {
+ 100   4                                                      //Xa_ = 0; Xb = 0;
+ 101   4                                                  return;
+ 102   4                                              }
+ 103   3                                              break;
+ 104   3                               case 5:
+ 105   3                                              Xa = 0; Xa_ = 1; Xb = 0; Xb_ = 0; //第五拍
+ 106   3                                              length = length - 0.075;
+ 107   3                                              xFlag = 6;
+ 108   3                                              delay();
+ 109   3                                              if (length <= 0)
+ 110   3                                              {
+ 111   4                                                  //Xa_ = 0;
+ 112   4                                                  return;
+ 113   4                                              }
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 3   
+
+ 114   3                                              break;
+ 115   3                               case 6:
+ 116   3                                              Xa = 0; Xa_ = 1; Xb = 0; Xb_ = 1; //第六拍
+ 117   3                                              length = length - 0.075;
+ 118   3                                              xFlag = 7;
+ 119   3                                              delay();
+ 120   3                                              if (length <= 0)
+ 121   3                                              {
+ 122   4                                                      //Xa_ = 0; Xb_ = 0;
+ 123   4                                                  return;
+ 124   4                                              }  
+ 125   3                                              break;
+ 126   3                               case 7:
+ 127   3                                              Xa = 0; Xa_ = 0; Xb = 0; Xb_ = 1; //第七拍
+ 128   3                                              length = length - 0.075;
+ 129   3                                              xFlag = 8;
+ 130   3                                              delay();
+ 131   3                                              if (length <= 0)
+ 132   3                                              {
+ 133   4                                                      //Xb_ = 0;
+ 134   4                                                      return;
+ 135   4                                              }
+ 136   3                                              break;
+ 137   3                               case 8:
+ 138   3                                              Xa = 1; Xa_ = 0; Xb = 0; Xb_ = 1; //第八拍
+ 139   3                                              length = length - 0.075;
+ 140   3                                              xFlag = 1;
+ 141   3                                              delay();
+ 142   3                                              if (length <= 0)
+ 143   3                                              {
+ 144   4                                                      //Xa = 0; Xb_ = 0;
+ 145   4                                                  return;
+ 146   4                                              }
+ 147   3                                              break;
+ 148   3                      }
+ 149   2              }
+ 150   1      }
+ 151          //控制X轴反转
+ 152          void xReversalTurn(double length)
+ 153          {
+ 154   1              while (1)
+ 155   1              {
+ 156   2                      switch (xFlag)
+ 157   2                      {
+ 158   3                              case 1:
+ 159   3                                         Xa = 1; Xa_ = 0; Xb = 0; Xb_ = 1; //第一拍
+ 160   3                                         length = length - 0.075;
+ 161   3                                         xFlag = 8;
+ 162   3                                         delay();
+ 163   3                                         if (length <= 0)
+ 164   3                                         {
+ 165   4                                                 //Xa = 0; Xb_ = 0;
+ 166   4                                             return;
+ 167   4                                         }
+ 168   3                                         break;
+ 169   3                              case 8:
+ 170   3                                         Xa = 0; Xa_ = 0; Xb = 0; Xb_ = 1; //第二拍
+ 171   3                                         length = length - 0.075;
+ 172   3                                         xFlag = 7;
+ 173   3                                         delay();
+ 174   3                                         if (length <= 0)
+ 175   3                                         {
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 4   
+
+ 176   4                                                 //Xb_ = 0;
+ 177   4                                             return;
+ 178   4                                         }
+ 179   3                                         break;
+ 180   3                              case 7:
+ 181   3                                         Xa = 0; Xa_ = 1; Xb = 0; Xb_ = 1; //第三拍
+ 182   3                                         length = length - 0.075;
+ 183   3                                         xFlag = 6;
+ 184   3                                         delay();
+ 185   3                                         if (length <= 0)
+ 186   3                                         {
+ 187   4                                             //Xa_ = 0; Xb_ = 0;
+ 188   4                                             return;
+ 189   4                                         }
+ 190   3                                         break;
+ 191   3                              case 6:
+ 192   3                                         Xa = 0; Xa_ = 1; Xb = 0; Xb_ = 0; //第四拍
+ 193   3                                         length = length - 0.075;
+ 194   3                                         xFlag = 5;
+ 195   3                                         delay();
+ 196   3                                         if (length <= 0)
+ 197   3                                         {
+ 198   4                                                 //Xa_ = 0;
+ 199   4                                             return;
+ 200   4                                         }
+ 201   3                                         break;
+ 202   3                              case 5:
+ 203   3                                         Xa = 0; Xa_ = 1; Xb = 1; Xb_ = 0; //第五拍
+ 204   3                                         length = length - 0.075;
+ 205   3                                         xFlag = 4;
+ 206   3                                         delay();
+ 207   3                                         if (length <= 0)
+ 208   3                                         {
+ 209   4                                                 //Xa_ = 0; Xb = 0;
+ 210   4                                             return;
+ 211   4                                         }
+ 212   3                                         break;
+ 213   3                              case 4:
+ 214   3                                         Xa = 0; Xa_ = 0; Xb = 1; Xb_ = 0; //第六拍
+ 215   3                                         length = length - 0.075;
+ 216   3                                         xFlag = 3;
+ 217   3                                         delay();
+ 218   3                                     if (length <= 0)
+ 219   3                                         {
+ 220   4                                                      //Xb = 0;
+ 221   4                                              return;
+ 222   4                                         }
+ 223   3                                         break;
+ 224   3                              case 3:
+ 225   3                                         Xa = 1; Xa_ = 0; Xb = 1; Xb_ = 0; //第七拍
+ 226   3                                         length = length - 0.075;
+ 227   3                                         xFlag = 2;
+ 228   3                                         delay();
+ 229   3                                         if (length <= 0)
+ 230   3                                         {
+ 231   4                                                 //Xa = 0; Xb = 0;
+ 232   4                                             return;
+ 233   4                                         }
+ 234   3                                         break;
+ 235   3                              case 2:
+ 236   3                                         Xa = 1; Xa_ = 0; Xb = 0; Xb_ = 0; //第八拍
+ 237   3                                         length = length - 0.075;
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 5   
+
+ 238   3                                         xFlag = 1;
+ 239   3                                         delay();
+ 240   3                                         if (length <= 0)
+ 241   3                                         {
+ 242   4                                             //Xa = 0;
+ 243   4                                             return; 
+ 244   4                                         }
+ 245   3                                         break;
+ 246   3                      }
+ 247   2              }
+ 248   1      }
+ 249          //控制Y轴正转
+ 250          void yPositiveTurn(double length)
+ 251          {
+ 252   1              while (1)
+ 253   1              {
+ 254   2                      switch (yFlag)
+ 255   2                      {
+ 256   3                              case 1:
+ 257   3                                         Ya = 1; Ya_ = 0; Yb = 0; Yb_ = 0; //第一拍
+ 258   3                                         length = length - 0.075;
+ 259   3                                         yFlag = 2;
+ 260   3                                         delay();
+ 261   3                                         if (length <= 0)
+ 262   3                                         {
+ 263   4                                                 //Ya = 0;
+ 264   4                                                 return;
+ 265   4                                         }
+ 266   3                                         break;
+ 267   3                              case 2:    
+ 268   3                                              Ya = 1; Ya_ = 0; Yb = 1; Yb_ = 0; //第二拍
+ 269   3                                              length = length - 0.075;
+ 270   3                                              yFlag = 3;
+ 271   3                                              delay();
+ 272   3                                              if (length <= 0)
+ 273   3                                              {
+ 274   4                                                      //Ya = 0; Yb = 0;
+ 275   4                                                  return;
+ 276   4                                              }
+ 277   3                                              break;
+ 278   3                               case 3:
+ 279   3                                              Ya = 0; Ya_ = 0; Yb = 1; Yb_ = 0; //第三拍
+ 280   3                                              length = length - 0.075;
+ 281   3                                              yFlag = 4;
+ 282   3                                              delay();
+ 283   3                                              if (length <= 0)
+ 284   3                                              {
+ 285   4                                                      //Yb = 0;
+ 286   4                                                  return;
+ 287   4                                              }
+ 288   3                                              break;
+ 289   3                               case 4:
+ 290   3                                              Ya = 0; Ya_ = 1; Yb = 1; Yb_ = 0; //第四拍
+ 291   3                                              length = length - 0.075;
+ 292   3                                              yFlag = 5;
+ 293   3                                              delay();
+ 294   3                                              if (length <= 0)
+ 295   3                                              {
+ 296   4                                                      //Ya_ = 0; Yb = 0;
+ 297   4                                                  return;
+ 298   4                                              }
+ 299   3                                              break;
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 6   
+
+ 300   3                               case 5:
+ 301   3                                              Ya = 0; Ya_ = 1; Yb = 0; Yb_ = 0; //第五拍
+ 302   3                                              length = length - 0.075;
+ 303   3                                              yFlag = 6;
+ 304   3                                              delay();
+ 305   3                                              if (length <= 0)
+ 306   3                                              {
+ 307   4                                                      //Ya_ = 0;
+ 308   4                                                  return;
+ 309   4                                              }
+ 310   3                                              break;
+ 311   3                               case 6:
+ 312   3                                              Ya = 0; Ya_ = 1; Yb = 0; Yb_ = 1; //第六拍
+ 313   3                                              length = length - 0.075;
+ 314   3                                              yFlag = 7;
+ 315   3                                              delay();
+ 316   3                                              if (length <= 0)
+ 317   3                                              {
+ 318   4                                                      //Ya_ = 0; Yb_ = 0;
+ 319   4                                                  return;
+ 320   4                                              }
+ 321   3                                              break;
+ 322   3                               case 7:
+ 323   3                                              Ya = 0; Ya_ = 0; Yb = 0; Yb_ = 1; //第七拍
+ 324   3                                              length = length - 0.075;
+ 325   3                                              yFlag = 8;
+ 326   3                                              delay();
+ 327   3                                              if (length <= 0)
+ 328   3                                              {
+ 329   4                                                      //Yb_ = 0;
+ 330   4                                                  return;
+ 331   4                                              }
+ 332   3                                              break;
+ 333   3                               case 8:
+ 334   3                                              Ya = 1; Ya_ = 0; Yb = 0; Yb_ = 1; //第八拍
+ 335   3                                              length = length - 0.075;
+ 336   3                                              yFlag = 1;
+ 337   3                                              delay();
+ 338   3                                              if (length <= 0)
+ 339   3                                              {
+ 340   4                                                      //Ya = 0; Yb_ = 0;
+ 341   4                                                  return;
+ 342   4                                              }
+ 343   3                                              break;
+ 344   3                      }
+ 345   2              }
+ 346   1      }
+ 347          //控制Y轴反转
+ 348          void yReversalTurn(double length)
+ 349          {
+ 350   1              while (1)
+ 351   1              {
+ 352   2                      switch (yFlag)
+ 353   2                      {
+ 354   3                              case 1:
+ 355   3                                         Ya = 1; Ya_ = 0; Yb = 0; Yb_ = 1; //第一拍
+ 356   3                                         length = length - 0.075;
+ 357   3                                         yFlag = 8;
+ 358   3                                         delay();
+ 359   3                                         if (length <= 0)
+ 360   3                                         {
+ 361   4                                             //Ya = 0; Yb_ = 0;
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 7   
+
+ 362   4                                             return;
+ 363   4                                         }
+ 364   3                                         break;
+ 365   3                              case 8:
+ 366   3                                         Ya = 0; Ya_ = 0; Yb = 0; Yb_ = 1; //第二拍
+ 367   3                                         length = length - 0.075;
+ 368   3                                         yFlag = 7;
+ 369   3                                         delay();
+ 370   3                                         if (length <= 0)
+ 371   3                                         {
+ 372   4                                                 //Yb_ = 0;
+ 373   4                                             return;
+ 374   4                                         }
+ 375   3                                         break;
+ 376   3                              case 7:
+ 377   3                                         Ya = 0; Ya_ = 1; Yb = 0; Yb_ = 1; //第三拍
+ 378   3                                         length = length - 0.075;
+ 379   3                                         yFlag = 6;
+ 380   3                                         delay();
+ 381   3                                         if (length <= 0)
+ 382   3                                         {
+ 383   4                                                 //Ya_ = 0; Yb_ = 0; 
+ 384   4                                             return;
+ 385   4                                         }
+ 386   3                                         break;
+ 387   3                              case 6:
+ 388   3                                         Ya = 0; Ya_ = 1; Yb = 0; Yb_ = 0; //第四拍
+ 389   3                                         length = length - 0.075;
+ 390   3                                         yFlag = 5;
+ 391   3                                         delay();
+ 392   3                                         if (length <= 0)
+ 393   3                                         {
+ 394   4                                            // Ya_ = 0; 
+ 395   4                                             return;
+ 396   4                                         }
+ 397   3                                         break;
+ 398   3                              case 5:
+ 399   3                                         Ya = 0; Ya_ = 1; Yb = 1; Yb_ = 0; //第五拍
+ 400   3                                         length = length - 0.075;
+ 401   3                                         yFlag = 4;
+ 402   3                                         delay();
+ 403   3                                         if (length <= 0)
+ 404   3                                         {
+ 405   4                                             //Ya_ = 0; Yb = 0;
+ 406   4                                             return;
+ 407   4                                         }
+ 408   3                                         break;
+ 409   3                              case 4:
+ 410   3                                         Ya = 0; Ya_ = 0; Yb = 1; Yb_ = 0; //第六拍
+ 411   3                                         length = length - 0.075;
+ 412   3                                         yFlag = 3;
+ 413   3                                         delay();
+ 414   3                                     if (length <= 0)
+ 415   3                                         {
+ 416   4                                                      //Yb = 0;
+ 417   4                                              return;
+ 418   4                                         }
+ 419   3                                         break;
+ 420   3                              case 3:
+ 421   3                                         Ya = 1; Ya_ = 0; Yb = 1; Yb_ = 0; //第七拍
+ 422   3                                         length = length - 0.075;
+ 423   3                                         yFlag = 2;
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 8   
+
+ 424   3                                         delay();
+ 425   3                                         if (length <= 0)
+ 426   3                                         {
+ 427   4                                                      //Ya = 0; Yb = 0;
+ 428   4                                              return;
+ 429   4                                         }
+ 430   3                                         break;
+ 431   3                              case 2:
+ 432   3                                         Ya = 1; Ya_ = 0; Yb = 0; Yb_ = 0; //第八拍
+ 433   3                                         length = length - 0.075;
+ 434   3                                         yFlag = 1;
+ 435   3                                         delay();
+ 436   3                                         if (length <= 0)
+ 437   3                                         {
+ 438   4                                                      //Ya = 0; 
+ 439   4                                                      return;
+ 440   4                                         }
+ 441   3                                         break;
+ 442   3                      }
+ 443   2              }
+ 444   1      }
+ 445          //单片机发送字符串给电脑，在电脑上显示信息（注意：需等待发送完毕，才能�
+             -�行下一步操作，浪费时间!!!）
+ 446          void printf(unsigned char *show)
+ 447          {
+ 448   1              unsigned int i = 0;                 
+ 449   1              for (i = 0; show[i] != '\0'; i++)
+ 450   1              {
+ 451   2                      SBUF = show[i];  
+ 452   2                      while(!TI);     //直到发送结束
+ 453   2                      TI = 0;         //软件清零
+ 454   2              }
+ 455   1      } 
+ 456          //快速定位算法
+ 457          void quickPosition(double X, double Y)
+ 458          {
+ 459   1              double xLength = 0, yLength = 0;       //定义步进电机需要移动的距离, xLength表示在x轴要
+             -移动的距离，ylength同xLength
+ 460   1              
+ 461   1              xLength = fabs(X - x0);
+ 462   1              yLength = fabs(Y - y0);
+ 463   1              
+ 464   1              if (X > x0)
+ 465   1                      xPositiveTurn(xLength);     //向x轴正方向运动，参数是毫米
+ 466   1              else
+ 467   1                      xReversalTurn(xLength);     //向x轴负方向运动，参数是毫米
+ 468   1              
+ 469   1              if (Y > y0)
+ 470   1                      yPositiveTurn(yLength);     //向y轴正方向运动，参数是毫米
+ 471   1              else 
+ 472   1                      yReversalTurn(yLength);     //向y轴负方向运动，参数是毫米
+ 473   1      
+ 474   1              x0 = X;     //更改起始位置的坐标
+ 475   1              y0 = Y;
+ 476   1      }
+ 477          
+ 478          //直线插补算法
+ 479          void linearInterpolation(double X, double Y)
+ 480          {
+ 481   1              double slope;                      //定义终点的斜率（固定的值）
+ 482   1              double slopeTemp = 0;              //定义动点斜率，用于和终点的斜率进行比较, 初值为
+             -0
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 9   
+
+ 483   1              double xTemp = x0, yTemp = y0;     //定义动点坐标，其初值等于起始位置的坐标
+ 484   1              
+ 485   1              double N;                       //定义N为起始位置到终点两个步进电机一共要走的步数�
+             -��定义每一步2拍，即精度为0.15毫米
+ 486   1              double i = 0;                   //定义变量i，表示两个步进电机一经走了i步, 初始化为0
+ 487   1              
+ 488   1              //如果终点和起点相同,停止
+ 489   1              if (X == x0 && Y == y0)
+ 490   1              {
+ 491   2                      return;
+ 492   2              }
+ 493   1              //如果终点和起点是平行线(即斜率是0或无穷大)
+ 494   1              if (X - x0 == 0 || Y - y0 == 0)
+ 495   1              {
+ 496   2                      quickPosition(X, Y);  //用快速定位的方式移动
+ 497   2                      return;
+ 498   2              }
+ 499   1              
+ 500   1              //如果起点和终点构成斜线
+ 501   1              if (X - x0 == 0)
+ 502   1              {
+ 503   2                      //printf("ERROR! (In the linearInterpolation)");
+ 504   2                      return ;
+ 505   2              }
+ 506   1              slope =(Y - y0) / (X - x0);   //求得直线斜率
+ 507   1              N = (fabs(X - x0) + fabs(Y - y0)) / Length;   //一步定为0.6毫米，共需要走N步。
+ 508   1              
+ 509   1              
+ 510   1              if (slope > 0 && X > x0 && Y > y0)       //判断该直线是否和第一象限的类似
+ 511   1              {
+ 512   2                      while (i < N)
+ 513   2                      {
+ 514   3                              if (xTemp == x0 && yTemp == y0)  //如果动点在起始位置上
+ 515   3                              {
+ 516   4                                      xPositiveTurn(Length);        //规定x轴向正方向移动一个基本步进长度
+ 517   4                                      xTemp = xTemp + Length;        //动点横坐标加一个步进长度
+ 518   4                                      slopeTemp = (yTemp - y0) / (xTemp - x0);  //更新动点和起始坐标的斜率
+ 519   4                                      i++;        //步数加一
+ 520   4                              }
+ 521   3                              if (slopeTemp == slope)                    //动点斜率等于终点斜率，即动点在该直线上
+ 522   3                              {
+ 523   4                                      xPositiveTurn(Length);        //规定x轴向正方向移动一个基本步进长度
+ 524   4                                      xTemp = xTemp + Length;        //动点横坐标加一个步进长度
+ 525   4                                      slopeTemp = (yTemp - y0) / (xTemp - x0);  //更新动点和起始坐标的斜率
+ 526   4                                      i++;
+ 527   4                              }
+ 528   3                              if (slopeTemp < slope)           //动点在该直线之下
+ 529   3                              {
+ 530   4                                      yPositiveTurn(Length);       //y轴增加一个步进距离
+ 531   4                                      yTemp = yTemp + Length;      //动点纵坐标增加一个步进长度
+ 532   4                                      slopeTemp = (yTemp - y0) / (xTemp - x0);  //更新动点和起始坐标的斜率
+ 533   4                                      i++;
+ 534   4                              }
+ 535   3                              if (slopeTemp > slope)                               //动点斜率等于终点斜率，即动点在该
+             -直线上
+ 536   3                              {
+ 537   4                                      xPositiveTurn(Length);       //x轴向正方向移动一个基本步进长度
+ 538   4                                      xTemp = xTemp + Length;      //动点横坐标加一个步进长度
+ 539   4                                      slopeTemp = (yTemp - y0) / (xTemp - x0);  //更新动点和起始坐标的斜率
+ 540   4                                      i++;
+ 541   4                              }                               
+ 542   3                      }               
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 10  
+
+ 543   2              }       
+ 544   1              if (slope < 0 && X < x0 && Y > y0) //判断该直线是否和第二象限的类似（与第一象限算�
+             -�有差异）
+ 545   1              {
+ 546   2                      while (i < N)
+ 547   2                      {
+ 548   3                              if (xTemp == x0 && yTemp == y0)   //如果动点在起始位置
+ 549   3                              {
+ 550   4                                      xReversalTurn(Length);        //规定x轴向负方向移动一个基本步进长度
+ 551   4                                      xTemp = xTemp - Length;       //动点横坐标减一个步进长度
+ 552   4                                      yPositiveTurn(Length);        //y轴增加一个步进距离
+ 553   4                                      yTemp = yTemp + Length;       //动点纵坐标增加一个步进长度
+ 554   4                                      slopeTemp = (yTemp - y0) / (xTemp - x0);  //更新动点和起始坐标的斜率
+ 555   4                                      i = i + 2;
+ 556   4                              }
+ 557   3                              if (slopeTemp == slope)                              //动点斜率等于终点斜率，即动点在该
+             -直线上
+ 558   3                              {
+ 559   4                                      xReversalTurn(Length);        //规定x轴向负方向移动一个基本步进长度
+ 560   4                                      xTemp = xTemp - Length;       //动点横坐标减一个步进长度
+ 561   4                                      slopeTemp = (yTemp - y0) / (xTemp - x0);  //更新动点和起始坐标的斜率
+ 562   4                                      i++;
+ 563   4                              }
+ 564   3                              if (slopeTemp < slope)                               //动点在该直线之下
+ 565   3                              {       
+ 566   4                                      xReversalTurn(Length);       //x轴向负方向移动一个基本步进长度
+ 567   4                                      xTemp = xTemp - Length;      //动点横坐标加一个步进长度
+ 568   4                                      slopeTemp = (yTemp - y0) / (xTemp - x0);  //更新动点和起始坐标的斜率
+ 569   4                                      i++;
+ 570   4                              }
+ 571   3                              if (slopeTemp > slope)                               //动点在该直线之上
+ 572   3                              {
+ 573   4                                      yPositiveTurn(Length);       //y轴增加一个步进距离
+ 574   4                                      yTemp = yTemp + Length;      //动点纵坐标增加一个步进长度
+ 575   4                                      slopeTemp = (yTemp - y0) / (xTemp - x0);  //更新动点和起始坐标的斜率        
+ 576   4                                      i++;
+ 577   4                              }                               
+ 578   3                      }       
+ 579   2              }
+ 580   1              if (slope > 0 && X < x0 && Y < y0) //类似于第三象限
+ 581   1              {
+ 582   2                      while (i < N)
+ 583   2                      {
+ 584   3                              if (xTemp == x0 && yTemp == y0)  //如果动点在起始位置上
+ 585   3                              {
+ 586   4                                      xReversalTurn(Length);       //x轴向负方向移动一个基本步进长度
+ 587   4                                      xTemp = xTemp - Length;      //动点横坐标加一个步进长度
+ 588   4                                      slopeTemp = (yTemp - y0) / (xTemp - x0);  //更新动点和起始坐标的斜率
+ 589   4                                      i++;
+ 590   4                              }
+ 591   3                              if (slopeTemp < slope) //动点在直线上方
+ 592   3                              {
+ 593   4                                      yReversalTurn(Length);  //向Y轴负方向移动距离
+ 594   4                                      yTemp = yTemp - Length;
+ 595   4                                      slopeTemp = (yTemp - y0) / (xTemp - x0);  //更新动点和起始坐标的斜率
+ 596   4                                      i++;
+ 597   4                              }
+ 598   3                              if (slopeTemp == slope)  //动点位于直线
+ 599   3                              {
+ 600   4                                      xReversalTurn(Length);       //x轴向负方向移动一个基本步进长度
+ 601   4                                      xTemp = xTemp - Length;      //动点横坐标加一个步进长度
+ 602   4                                      slopeTemp = (yTemp - y0) / (xTemp - x0);  //更新动点和起始坐标的斜率
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 11  
+
+ 603   4                                      i++;
+ 604   4                              }
+ 605   3                              if (slopeTemp > slope)  //动点在直线下方
+ 606   3                              {
+ 607   4                                      xReversalTurn(Length);       //x轴向负方向移动一个基本步进长度
+ 608   4                                      xTemp = xTemp - Length;      //动点横坐标加一个步进长度
+ 609   4                                      slopeTemp = (yTemp - y0) / (xTemp - x0);  //更新动点和起始坐标的斜率
+ 610   4                                      i++;
+ 611   4                              }       
+ 612   3                      }       
+ 613   2              }
+ 614   1              if (slope < 0 && X > x0 && Y < y0)  //类似于第四象限
+ 615   1              {
+ 616   2                      while (i < N)
+ 617   2                      {
+ 618   3                              if (xTemp == x0 && yTemp == y0) //动点在起始位置
+ 619   3                              {
+ 620   4                                      xPositiveTurn(Length);  //向x轴正方向走一步
+ 621   4                                      xTemp = xTemp + Length;
+ 622   4                                      yReversalTurn(Length);  //向Y轴负方向移动距离
+ 623   4                                      yTemp = yTemp - Length;
+ 624   4                                      slopeTemp = (yTemp - y0) / (xTemp - x0);  //更新动点和起始坐标的斜率
+ 625   4                                      i = i + 2;
+ 626   4                              }
+ 627   3                              if (slopeTemp == slope)
+ 628   3                              {
+ 629   4                                      xPositiveTurn(Length);  //向x轴正方向走一步
+ 630   4                                      xTemp = xTemp + Length;
+ 631   4                                      slopeTemp = (yTemp - y0) / (xTemp - x0);  //更新动点和起始坐标的斜率
+ 632   4                                      i++;
+ 633   4                              }
+ 634   3                              if (slopeTemp > slope)
+ 635   3                              {
+ 636   4                                      yReversalTurn(Length);  //向Y轴负方向移动一步
+ 637   4                                      yTemp = yTemp - Length;
+ 638   4                                      slopeTemp = (yTemp - y0) / (xTemp - x0);  //更新动点和起始坐标的斜率
+ 639   4                                      i++;
+ 640   4                              }
+ 641   3                              if (slopeTemp < slope)
+ 642   3                              {
+ 643   4                                      xPositiveTurn(Length);  //向x轴正方向走一步
+ 644   4                                      xTemp = xTemp + Length;
+ 645   4                                      slopeTemp = (yTemp - y0) / (xTemp - x0);  //更新动点和起始坐标的斜率
+ 646   4                                      i++;
+ 647   4                              }               
+ 648   3                      }       
+ 649   2              }
+ 650   1              x0 = X;                      //更改起始位置的坐标, 令程序结束
+ 651   1              y0 = Y;
+ 652   1              return;                      
+ 653   1      }
+ 654          //类似第一象限逆时针圆弧插补子程序
+ 655          void sub1(double x1, double y1, double x2, double y2)  //(x1, y1)-->(x2, y2)
+ 656          {
+ 657   1              //注意圆心坐标（a, b）已经在父程序中确定
+ 658   1              
+ 659   1              double xTemp = x1, yTemp = y1;  //定义动点(xTemp, yTemp), 初值为起始位置
+ 660   1              double N;                       //定义N为起始位置到终点两个步进电机一共要走的步数�
+             -��定义每一步2拍，即精度为0.15毫米
+ 661   1              double i = 0;                   //定义变量i，表示两个步进电机一经走了i步, 初始化为0
+ 662   1              double F = 0;        //定义偏差数，即动点距离圆弧的差值，(偏差函数F= x^2+y^2-R^2), �
+             -��于开始时动点在圆弧上，故F初值为0
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 12  
+
+ 663   1              double F1, F2, F3;   //三种不同方式的进给，所求的偏差数（1：-x方向的进给，2：+y�
+             -��向的进给，3：-x和+y都进给）
+ 664   1              
+ 665   1                      
+ 666   1              N = (fabs(x2 - x1) + fabs(y2 - y1)) / Length;   //一步定为0.6毫米，共需要走N步。
+ 667   1              
+ 668   1              while (i < N)
+ 669   1              {
+ 670   2                      F1 = F - 2*Length*xTemp + Length*Length + 2*a*Length;  //如果要按-x方向进给，偏差数为F1
+ 671   2                      F2 = F + 2*Length*yTemp + Length*Length - 2*b*Length;  //如果要按+y方向进给，偏差数为F2
+ 672   2                      F3 = F - 2*Length*xTemp + 2*Length*yTemp + 2*a*Length - 2*b*Length + 2*Length*Length;
+ 673   2              
+ 674   2                      if (fabs(F1) < fabs(F2))
+ 675   2                      {
+ 676   3                              if (fabs(F1) < fabs(F3))  //即F1最小, 用方式1
+ 677   3                              {
+ 678   4                                      xReversalTurn(Length);  //向X轴负方向移动一步
+ 679   4                                      xTemp = xTemp - Length;
+ 680   4                                      F = F1;   //更新偏差数
+ 681   4                                      i++;      //已走的步数加1
+ 682   4                              }
+ 683   3                              else                     //F3最小，用方式3
+ 684   3                              {
+ 685   4                                      xReversalTurn(Length);       //向X轴负方向移动一步
+ 686   4                                      xTemp = xTemp - Length;
+ 687   4                                      yPositiveTurn(Length);       //向y轴正方向移动一步
+ 688   4                                      yTemp = yTemp + Length;    
+ 689   4                                      F = F3;       //更新偏差数
+ 690   4                                      i = i + 2;    //已走的步数加1
+ 691   4                              }       
+ 692   3                      }
+ 693   2                      else
+ 694   2                      {
+ 695   3                              if (fabs(F2) < fabs(F3))  //F2最小，用方式2
+ 696   3                              {
+ 697   4                                      yPositiveTurn(Length);       //向y轴正方向移动一步
+ 698   4                                      yTemp = yTemp + Length;   
+ 699   4                                      F = F2;
+ 700   4                                      i++;                    
+ 701   4                              }
+ 702   3                              else                   //F3最小，用方式3
+ 703   3                              {
+ 704   4                                      xReversalTurn(Length);       //向X轴负方向移动一步
+ 705   4                                      xTemp = xTemp - Length;
+ 706   4                                      yPositiveTurn(Length);       //向y轴正方向移动一步
+ 707   4                                      yTemp = yTemp + Length;    
+ 708   4                                      F = F3;       //更新偏差数
+ 709   4                                      i = i + 2;    //已走的步数加1
+ 710   4                              }
+ 711   3                              
+ 712   3                      }               
+ 713   2              }       
+ 714   1      }
+ 715          //类似第二象限逆时针圆弧插补子程序
+ 716          void sub2(double x1, double y1, double x2, double y2) //（x1，y1）---> (x2, y2)
+ 717          {
+ 718   1              //注意圆心坐标（a, b）已经在父程序中确定
+ 719   1              
+ 720   1              double xTemp = x1, yTemp = y1;  //定义动点(xTemp, yTemp), 初值为起始位置
+ 721   1              double N;                       //定义N为起始位置到终点两个步进电机一共要走的步数�
+             -��定义每一步2拍，即精度为0.15毫米
+ 722   1              double i = 0;                   //定义变量i，表示两个步进电机一经走了i步, 初始化为0
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 13  
+
+ 723   1              double F = 0;        //定义偏差数，即动点距离圆弧的差值，(偏差函数F= x^2+y^2-R^2), �
+             -��于开始时动点在圆弧上，故F初值为0
+ 724   1              double F1, F2, F3;   //三种不同方式的进给，所求的偏差数（1：-x方向的进给，2：-y�
+             -��向的进给，3：-x和-y都进给）
+ 725   1              
+ 726   1                      
+ 727   1              N = (fabs(x2 - x1) + fabs(y2 - y1)) / Length;   //一步定为0.6毫米，共需要走N步。
+ 728   1              
+ 729   1              while (i < N)
+ 730   1              {
+ 731   2                      F1 = F - 2*Length*xTemp + Length*Length + 2*a*Length;  //如果要按-x方向进给，偏差数为F1
+ 732   2                      F2 = F - 2*Length*yTemp + Length*Length + 2*b*Length;  //如果要按-y方向进给，偏差数为F2
+ 733   2                      F3 = F - 2*Length*xTemp - 2*Length*yTemp + 2*a*Length + 2*b*Length + 2*Length*Length;
+ 734   2              
+ 735   2                      if (fabs(F1) < fabs(F2))
+ 736   2                      {
+ 737   3                              if (fabs(F1) < fabs(F3))  //即F1最小, 用方式1
+ 738   3                              {
+ 739   4                                      xReversalTurn(Length);  //向X轴负方向移动一步
+ 740   4                                      xTemp = xTemp - Length;
+ 741   4                                      F = F1;   //更新偏差数
+ 742   4                                      i++;      //已走的步数加1
+ 743   4                              }
+ 744   3                              else                     //F3最小，用方式3
+ 745   3                              {
+ 746   4                                      xReversalTurn(Length);       //向X轴负方向移动一步
+ 747   4                                      xTemp = xTemp - Length;
+ 748   4                                      yReversalTurn(Length);       //向y轴负方向移动一步
+ 749   4                                      yTemp = yTemp - Length;    
+ 750   4                                      F = F3;       //更新偏差数
+ 751   4                                      i = i + 2;    //已走的步数加2
+ 752   4                              }       
+ 753   3                      }
+ 754   2                      else
+ 755   2                      {
+ 756   3                              if (fabs(F2) < fabs(F3))  //F2最小，用方式2
+ 757   3                              {
+ 758   4                                      yReversalTurn(Length);       //向y轴负方向移动一步
+ 759   4                                      yTemp = yTemp - Length;     
+ 760   4                                      F = F2;
+ 761   4                                      i++;                    
+ 762   4                              }
+ 763   3                              else                   //F3最小，用方式3
+ 764   3                              {
+ 765   4                                      xReversalTurn(Length);       //向X轴负方向移动一步
+ 766   4                                      xTemp = xTemp - Length;
+ 767   4                                      yReversalTurn(Length);       //向y轴负方向移动一步
+ 768   4                                      yTemp = yTemp - Length;    
+ 769   4                                      F = F3;       //更新偏差数
+ 770   4                                      i = i + 2;    //已走的步数加2
+ 771   4                              }
+ 772   3                              
+ 773   3                      }               
+ 774   2              }       
+ 775   1      }
+ 776          //类似第三象限逆时针圆弧插补子程序
+ 777          void sub3(double x1, double y1, double x2, double y2) //起点（x1，y1）到终点（x2, y2）
+ 778          {
+ 779   1              //注意圆心坐标（a, b）已经在父程序中确定
+ 780   1              
+ 781   1              double xTemp = x1, yTemp = y1;  //定义动点(xTemp, yTemp), 初值为起始位置
+ 782   1              double N;                       //定义N为起始位置到终点两个步进电机一共要走的步数�
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 14  
+
+             -��定义每一步2拍，即精度为0.15毫米
+ 783   1              double i = 0;                   //定义变量i，表示两个步进电机一经走了i步, 初始化为0
+ 784   1              double F = 0;        //定义偏差数，即动点距离圆弧的差值，(偏差函数F= x^2+y^2-R^2), �
+             -��于开始时动点在圆弧上，故F初值为0
+ 785   1              double F1, F2, F3;   //三种不同方式的进给，所求的偏差数（1：+x方向的进给，2：-y�
+             -��向的进给，3：+x和-y都进给）
+ 786   1              
+ 787   1                      
+ 788   1              N = (fabs(x2 - x1) + fabs(y2 - y1)) / Length;   //一步定为0.6毫米，共需要走N步。
+ 789   1              
+ 790   1              while (i < N)
+ 791   1              {
+ 792   2                      F1 = F + 2*Length*xTemp + Length*Length - 2*a*Length;  //如果要按+x方向进给，偏差数为F1
+ 793   2                      F2 = F - 2*Length*yTemp + Length*Length + 2*b*Length;  //如果要按-y方向进给，偏差数为F2
+ 794   2                      F3 = F + 2*Length*xTemp - 2*Length*yTemp - 2*a*Length + 2*b*Length + 2*Length*Length;
+ 795   2              
+ 796   2                      if (fabs(F1) < fabs(F2))
+ 797   2                      {
+ 798   3                              if (fabs(F1) < fabs(F3))  //即F1最小, 用方式1
+ 799   3                              {
+ 800   4                                      xPositiveTurn(Length);       //向+x轴移动一步
+ 801   4                                      xTemp = xTemp + Length;    
+ 802   4                                      F = F1;   //更新偏差数
+ 803   4                                      i++;      //已走的步数加1
+ 804   4                              }
+ 805   3                              else                     //F3最小，用方式3
+ 806   3                              {
+ 807   4                                      xPositiveTurn(Length);       //向+x轴移动一步
+ 808   4                                      xTemp = xTemp + Length;
+ 809   4                                      yReversalTurn(Length);       //向-y轴移动一步
+ 810   4                                      yTemp = yTemp - Length;    
+ 811   4                                      F = F3;       //更新偏差数
+ 812   4                                      i = i + 2;    //已走的步数加2
+ 813   4                              }       
+ 814   3                      }
+ 815   2                      else
+ 816   2                      {
+ 817   3                              if (fabs(F2) < fabs(F3))  //F2最小，用方式2
+ 818   3                              {
+ 819   4                                      yReversalTurn(Length);       //向y轴负方向移动一步
+ 820   4                                      yTemp = yTemp - Length;     
+ 821   4                                      F = F2;
+ 822   4                                      i++;                    
+ 823   4                              }
+ 824   3                              else                   //F3最小，用方式3
+ 825   3                              {
+ 826   4                                      xPositiveTurn(Length);       //向+x轴移动一步
+ 827   4                                      xTemp = xTemp + Length;
+ 828   4                                      yReversalTurn(Length);       //向-y轴移动一步
+ 829   4                                      yTemp = yTemp - Length;    
+ 830   4                                      F = F3;       //更新偏差数
+ 831   4                                      i = i + 2;    //已走的步数加2
+ 832   4                              }
+ 833   3                              
+ 834   3                      }               
+ 835   2              }       
+ 836   1              
+ 837   1      }
+ 838          //类似第四象限逆时针圆弧插补子程序
+ 839          void sub4(double x1, double y1, double x2, double y2)
+ 840          {
+ 841   1      
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 15  
+
+ 842   1              //注意圆心坐标（a, b）已经在父程序中确定
+ 843   1                      
+ 844   1              double xTemp = x1, yTemp = y1;  //定义动点(xTemp, yTemp), 初值为起始位置
+ 845   1              double N;                       //定义N为起始位置到终点两个步进电机一共要走的步数�
+             -��定义每一步2拍，即精度为0.15毫米
+ 846   1              double i = 0;                   //定义变量i，表示两个步进电机一经走了i步, 初始化为0
+ 847   1              double F = 0;        //定义偏差数，即动点距离圆弧的差值，(偏差函数F= x^2+y^2-R^2), �
+             -��于开始时动点在圆弧上，故F初值为0
+ 848   1              double F1, F2, F3;   //三种不同方式的进给，所求的偏差数（1：+x方向的进给，2：+y�
+             -��向的进给，3：+x和+y都进给）
+ 849   1              
+ 850   1              
+ 851   1              N = (fabs(x2 - x1) + fabs(y2 - y1)) / Length;   //一步定为0.15毫米，共需要走N步。
+ 852   1              
+ 853   1              while (i < N)
+ 854   1              {
+ 855   2                      F1 = F + 2*Length*xTemp + Length*Length - 2*a*Length;  //如果要按+x方向进给，偏差数为F1
+ 856   2                      F2 = F + 2*Length*yTemp + Length*Length - 2*b*Length;  //如果要按+y方向进给，偏差数为F2
+ 857   2                      F3 = F + 2*Length*xTemp + 2*Length*yTemp - 2*a*Length - 2*b*Length + 2*Length*Length;
+ 858   2              
+ 859   2                      if (fabs(F1) < fabs(F2))
+ 860   2                      {
+ 861   3                              if (fabs(F1) < fabs(F3))  //即F1最小, 用方式1
+ 862   3                              {
+ 863   4                                      xPositiveTurn(Length);       //向+x轴移动一步
+ 864   4                                      xTemp = xTemp + Length;    
+ 865   4                                      F = F1;   //更新偏差数
+ 866   4                                      i++;      //已走的步数加1
+ 867   4                              }
+ 868   3                              else                     //F3最小，用方式3
+ 869   3                              {
+ 870   4                                      xPositiveTurn(Length);       //向+x轴移动一步
+ 871   4                                      xTemp = xTemp + Length;
+ 872   4                                      yPositiveTurn(Length);       //向+y轴移动一步
+ 873   4                                      yTemp = yTemp + Length;  
+ 874   4                                      F = F3;       //更新偏差数
+ 875   4                                      i = i + 2;    //已走的步数加2
+ 876   4                              }       
+ 877   3                      }
+ 878   2                      else
+ 879   2                      {
+ 880   3                              if (fabs(F2) < fabs(F3))  //F2最小，用方式2
+ 881   3                              {
+ 882   4                                      yPositiveTurn(Length);       //向+y轴移动一步
+ 883   4                                      yTemp = yTemp + Length;      
+ 884   4                                      F = F2;
+ 885   4                                      i++;                    
+ 886   4                              }
+ 887   3                              else                   //F3最小，用方式3
+ 888   3                              {
+ 889   4                                      xPositiveTurn(Length);       //向+x轴移动一步
+ 890   4                                      xTemp = xTemp + Length;
+ 891   4                                      yPositiveTurn(Length);       //向+y轴移动一步
+ 892   4                                      yTemp = yTemp + Length;  
+ 893   4                                      F = F3;       //更新偏差数
+ 894   4                                      i = i + 2;    //已走的步数加2
+ 895   4                              }                       
+ 896   3                      }               
+ 897   2              }
+ 898   1      }
+ 899          //逆时针圆弧插补(用的是最小偏差法)
+ 900          void circularInterpolation_N(double X, double Y) //(X, Y)为终点坐标, (x0, y0)为起点坐标, （a，
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 16  
+
+             -b）为圆心
+ 901          {
+ 902   1          //注意圆心（a, b）已经在全局变量中定义并在父程序中赋值
+ 903   1              
+ 904   1              double r;        //定义半径r，其值为起点到原心（a, b）的距离
+ 905   1              
+ 906   1              r = sqrt((x0-a)*(x0-a) + (y0-b)*(y0-b));  //求得半径
+ 907   1              
+ 908   1              //起点在第一象限（包括x轴正半轴，不包括y轴正半轴）
+ 909   1              if (x0 > a && y0 >= b)   
+ 910   1              {
+ 911   2                      if (X >= a && Y > b)  //终点在第一象限（包括y轴正半轴，不包括x轴正半轴）
+ 912   2                      {
+ 913   3                              if (X >= x0)
+ 914   3                              {               
+ 915   4                                      if (X == x0 || Y >= y0 )
+ 916   4                                      {
+ 917   5                                              //printf("ERROR 1! The coordinate is wrong!");
+ 918   5                                              return;
+ 919   5                                      }
+ 920   4                                      sub1(x0, y0, a, (b+r));
+ 921   4                                      sub2(a, (b+r), (a-r), b);
+ 922   4                                      sub3((a-r), b, a, (b-r));
+ 923   4                                      sub4(a, (b-r), (a+r), b);
+ 924   4                                      sub1((a+r), b, X, Y);
+ 925   4                              }
+ 926   3                              if (X < x0)
+ 927   3                              {
+ 928   4                                      if (Y <= y0)
+ 929   4                                      {
+ 930   5                                              //printf("ERROR 2! The coordinate is wrong!");
+ 931   5                                              return;
+ 932   5                                      }
+ 933   4                                      sub1(x0, y0, X, Y);  
+ 934   4                              }               
+ 935   3                      }
+ 936   2                      if (X < a && Y >= b) //终点在第二象限
+ 937   2                      {
+ 938   3                              sub1(x0, y0, a, (b+r));
+ 939   3                              sub2(a, (b+r), X, Y);
+ 940   3                      }
+ 941   2                      if (X <= a && Y < b)  //终点在第三象限
+ 942   2                      {
+ 943   3                              sub1(x0, y0, a, (b+r));  
+ 944   3                              sub2(a, (b+r), (a-r), b);  
+ 945   3                              sub3((a-r), b, X, Y);           
+ 946   3                      }
+ 947   2                      if (X > a && Y <= b)  //终点在第四象限
+ 948   2                      {
+ 949   3                              sub1(x0, y0, a, (b+r));
+ 950   3                              sub2(a, (b+r), (a-r), b);
+ 951   3                              sub3((a-r), b, a, (b-r));
+ 952   3                              sub4(a, (b-r), X, Y);
+ 953   3                      }
+ 954   2              }
+ 955   1              //起点在第二象限（包括y轴正半轴，不包括x轴负半轴）
+ 956   1              if (x0 <= a && y0 > b)
+ 957   1              {
+ 958   2                      if (X < a && Y >= b) //终点在第二象限
+ 959   2                      {
+ 960   3                              if (Y >= y0)
+ 961   3                              {
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 17  
+
+ 962   4                                      if (Y == y0 || X <= x0)
+ 963   4                                      {
+ 964   5                                              //printf("ERROR 3! The coordinate is wrong!");
+ 965   5                                              return;
+ 966   5                                      }
+ 967   4                                      sub2(x0, y0, (a-r), b);
+ 968   4                                      sub3((a-r), b, a, (b-r));
+ 969   4                                      sub4(a, (b-r), (a+r), b);
+ 970   4                                      sub1((a+r), b, a, (b+r));
+ 971   4                                      sub2(a, (b+r), X, Y);
+ 972   4                              }
+ 973   3                              if (Y < y0)
+ 974   3                              {
+ 975   4                                      if (X >= x0)
+ 976   4                                      {
+ 977   5                                              //printf("ERROR 4! The coordinate is wrong!");
+ 978   5                                              return;
+ 979   5                                      }
+ 980   4                                      sub2(x0, y0, X, Y);  
+ 981   4                              }
+ 982   3                      }
+ 983   2                      if (X <= a && Y < b)  //终点在第三象限
+ 984   2                      {
+ 985   3                              sub2(x0, y0, (a-r), b);
+ 986   3                              sub3((a-r), b, X, Y);
+ 987   3                      }
+ 988   2                      if (X > a && Y <= b)  //终点在第四象限
+ 989   2                      {
+ 990   3                              sub2(x0, y0, (a-r), b);
+ 991   3                              sub3((a-r), b, a, (b-r));
+ 992   3                              sub4(a, (b-r), X, Y);
+ 993   3                      }
+ 994   2                      if (X >= a && Y > b)  //终点在第一象限（包括y轴正半轴，不包括x轴正半轴）
+ 995   2                      {
+ 996   3                              sub2(x0, y0, (a-r), b);
+ 997   3                              sub3((a-r), b, a, (b-r));
+ 998   3                              sub4(a, (b-r), (a+r), b);
+ 999   3                              sub1((a+r), b, X, Y);
+1000   3                      }               
+1001   2              }
+1002   1              //起点在第三象限（包括x轴负半轴，不包括Y轴负半轴）
+1003   1              if (x0 < a && y0 <= b)
+1004   1              {
+1005   2                      if (X <= a && Y < b)  //终点在第三象限
+1006   2                      {
+1007   3                              if (X <= x0)
+1008   3                              {
+1009   4                                      if (X == x0 || Y <= y0)
+1010   4                                      {
+1011   5                                              //printf("ERROR 5! The coordinate is wrong!");
+1012   5                                              return;
+1013   5                                      }
+1014   4                                      sub3(x0, y0, a, (b-r));
+1015   4                                      sub4(a, (b-r), (a+r), b);
+1016   4                                      sub1((a+r), b, a, (b+r));
+1017   4                                      sub2(a, (b+r), (a-r), b);
+1018   4                                      sub3((a-r), b, X, Y);                   
+1019   4                              }
+1020   3                              if (X > x0)
+1021   3                              {
+1022   4                                      if (Y >= y0)
+1023   4                                      {
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 18  
+
+1024   5                                              //printf("ERROR 6! The coordinate is wrong!");
+1025   5                                              return;
+1026   5                                      }
+1027   4                                      sub3(x0, y0, X, Y);
+1028   4                              }
+1029   3                      }
+1030   2                      if (X > a && Y <= b)  //终点在第四象限
+1031   2                      {
+1032   3                              sub3(x0, y0, a, (b-r));
+1033   3                              sub4(a, (b-r), X, Y);
+1034   3                      }
+1035   2                      if (X >= a && Y > b)  //终点在第一象限（包括y轴正半轴，不包括x轴正半轴）
+1036   2                      {
+1037   3                              sub3(x0, y0, a, (b-r));
+1038   3                              sub4(a, (b-r), (a+r), b);
+1039   3                              sub1((a+r), b, X, Y);
+1040   3                      }
+1041   2                      if (X < a && Y >= b) //终点在第二象限
+1042   2                      {
+1043   3                              sub3(x0, y0, a, (b-r));
+1044   3                              sub4(a, (b-r), (a+r), b);
+1045   3                              sub1((a+r), b, a, (b+r));
+1046   3                              sub2(a, (b+r), X, Y);
+1047   3                      }       
+1048   2              }
+1049   1              //起点在第四象限（包括Y轴负半轴，不包括x轴正半轴）
+1050   1              if (x0 >= a && y0 < b)
+1051   1              {
+1052   2                      if (X > a && Y <= b)  //终点在第四象限
+1053   2                      {
+1054   3                              if (Y <= y0)
+1055   3                              {
+1056   4                                      if (Y == y0 || X >= x0)
+1057   4                                      {
+1058   5                                              //printf("ERROR 7! The coordinate is wrong!");
+1059   5                                              return;
+1060   5                                      }
+1061   4                                      sub4(x0, y0, (a+r), b);
+1062   4                                      sub1((a+r), b, a, (b+r));
+1063   4                                      sub2(a, (b+r), (a-r), b);
+1064   4                                      sub3((a-r), b, a, (b-r));
+1065   4                                      sub4(a, (b-r), X, Y);
+1066   4                              }
+1067   3                              if (Y > y0)
+1068   3                              {
+1069   4                                      if (X <= x0)
+1070   4                                      {
+1071   5                                              //printf("ERROR 8! The coordinate is wrong!");
+1072   5                                              return;
+1073   5                                      }
+1074   4                                      sub4(x0, y0, X, Y);
+1075   4                              }
+1076   3                      }
+1077   2                      if (X >= a && Y > b)  //终点在第一象限（包括y轴正半轴，不包括x轴正半轴）
+1078   2                      {
+1079   3                              sub4(x0, y0, (a+r), b);
+1080   3                              sub1((a+r), b, X, Y);
+1081   3                      }
+1082   2                      if (X < a && Y >= b)  //终点在第二象限
+1083   2                      {
+1084   3                              sub4(x0, y0, (a+r), b);
+1085   3                              sub1((a+r), b, a, (b+r));
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 19  
+
+1086   3                              sub2(a, (b+r), X, Y);
+1087   3                      }       
+1088   2                      if (X <= a && Y < b)  //终点在第三象限
+1089   2                      {
+1090   3                              sub4(x0, y0, (a+r), b);
+1091   3                              sub1((a+r), b, a, (b+r));
+1092   3                              sub2(a, (b+r), (a-r), b);
+1093   3                              sub3((a-r), b, X, Y);           
+1094   3                      }               
+1095   2              }
+1096   1              x0 = X;    //更新起点位置
+1097   1              y0 = Y;
+1098   1      } 
+1099          //类似 第一象限 顺时针 圆弧插补子程序
+1100          void sub5(double x1, double y1, double x2, double y2)
+1101          {
+1102   1              //注意圆心坐标（a, b）已经在父程序中确定
+1103   1                      
+1104   1              double xTemp = x1, yTemp = y1;  //定义动点(xTemp, yTemp), 初值为起始位置
+1105   1              double N;                       //定义N为起始位置到终点两个步进电机一共要走的步数�
+             -��定义每一步2拍，即精度为0.15毫米
+1106   1              double i = 0;                   //定义变量i，表示两个步进电机一经走了i步, 初始化为0
+1107   1              double F = 0;        //定义偏差数，即动点距离圆弧的差值，(偏差函数F= x^2+y^2-R^2), �
+             -��于开始时动点在圆弧上，故F初值为0
+1108   1              double F1, F2, F3;   //三种不同方式的进给，所求的偏差数（1：+x方向的进给，2：+y�
+             -��向的进给，3：+x和+y都进给）
+1109   1              
+1110   1              N = (fabs(x2 - x1) + fabs(y2 - y1)) / Length;   //一步定为0.15毫米，共需要走N步。
+1111   1              
+1112   1              while (i < N)
+1113   1              {
+1114   2                      F1 = F + 2*Length*xTemp + Length*Length - 2*a*Length;  //如果要按+x方向进给，偏差数为F1
+1115   2                      F2 = F - 2*Length*yTemp + Length*Length + 2*b*Length;  //如果要按-y方向进给，偏差数为F2
+1116   2                      F3 = F + 2*Length*xTemp - 2*Length*yTemp - 2*a*Length + 2*b*Length + 2*Length*Length;
+1117   2              
+1118   2                      if (fabs(F1) < fabs(F2))
+1119   2                      {
+1120   3                              if (fabs(F1) < fabs(F3))  //即F1最小, 用方式1
+1121   3                              {
+1122   4                                      xPositiveTurn(Length);       //向+x轴移动一步
+1123   4                                      xTemp = xTemp + Length;    
+1124   4                                      F = F1;   //更新偏差数
+1125   4                                      i++;      //已走的步数加1
+1126   4                              }
+1127   3                              else                     //F3最小，用方式3
+1128   3                              {
+1129   4                                      xPositiveTurn(Length);       //向+x轴移动一步
+1130   4                                      xTemp = xTemp + Length;
+1131   4                                      yReversalTurn(Length);       //向-y轴移动一步
+1132   4                                      yTemp = yTemp - Length;    
+1133   4                                      F = F3;       //更新偏差数
+1134   4                                      i = i + 2;    //已走的步数加2
+1135   4                              }       
+1136   3                      }
+1137   2                      else
+1138   2                      {
+1139   3                              if (fabs(F2) < fabs(F3))  //F2最小，用方式2
+1140   3                              {
+1141   4                                      yReversalTurn(Length);       //向y轴负方向移动一步
+1142   4                                      yTemp = yTemp - Length;     
+1143   4                                      F = F2;
+1144   4                                      i++;                    
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 20  
+
+1145   4                              }
+1146   3                              else                   //F3最小，用方式3
+1147   3                              {
+1148   4                                      xPositiveTurn(Length);       //向+x轴移动一步
+1149   4                                      xTemp = xTemp + Length;
+1150   4                                      yReversalTurn(Length);       //向-y轴移动一步
+1151   4                                      yTemp = yTemp - Length;    
+1152   4                                      F = F3;       //更新偏差数
+1153   4                                      i = i + 2;    //已走的步数加2
+1154   4                              }
+1155   3                              
+1156   3                      }               
+1157   2              }       
+1158   1      }
+1159          //类似 第二象限 顺时针 圆弧插补子程序
+1160          void sub6(double x1, double y1, double x2, double y2)
+1161          {
+1162   1      
+1163   1              //注意圆心坐标（a, b）已经在父程序中确定
+1164   1                      
+1165   1              double xTemp = x1, yTemp = y1;  //定义动点(xTemp, yTemp), 初值为起始位置
+1166   1              double N;                       //定义N为起始位置到终点两个步进电机一共要走的步数�
+             -��定义每一步2拍，即精度为0.15毫米
+1167   1              double i = 0;                   //定义变量i，表示两个步进电机一经走了i步, 初始化为0
+1168   1              double F = 0;        //定义偏差数，即动点距离圆弧的差值，(偏差函数F= x^2+y^2-R^2), �
+             -��于开始时动点在圆弧上，故F初值为0
+1169   1              double F1, F2, F3;   //三种不同方式的进给，所求的偏差数（1：+x方向的进给，2：+y�
+             -��向的进给，3：+x和+y都进给）
+1170   1              
+1171   1              N = (fabs(x2 - x1) + fabs(y2 - y1)) / Length;   //一步定为0.15毫米，共需要走N步。
+1172   1      
+1173   1              while (i < N)
+1174   1              {
+1175   2                      F1 = F + 2*Length*xTemp + Length*Length - 2*a*Length;  //如果要按+x方向进给，偏差数为F1
+1176   2                      F2 = F + 2*Length*yTemp + Length*Length - 2*b*Length;  //如果要按+y方向进给，偏差数为F2
+1177   2                      F3 = F + 2*Length*xTemp + 2*Length*yTemp - 2*a*Length - 2*b*Length + 2*Length*Length;
+1178   2              
+1179   2                      if (fabs(F1) < fabs(F2))
+1180   2                      {
+1181   3                              if (fabs(F1) < fabs(F3))  //即F1最小, 用方式1
+1182   3                              {
+1183   4                                      xPositiveTurn(Length);       //向+x轴移动一步
+1184   4                                      xTemp = xTemp + Length;    
+1185   4                                      F = F1;   //更新偏差数
+1186   4                                      i++;      //已走的步数加1
+1187   4                              }
+1188   3                              else                     //F3最小，用方式3
+1189   3                              {
+1190   4                                      xPositiveTurn(Length);       //向+x轴移动一步
+1191   4                                      xTemp = xTemp + Length;
+1192   4                                      yPositiveTurn(Length);       //向+y轴移动一步
+1193   4                                      yTemp = yTemp + Length;  
+1194   4                                      F = F3;       //更新偏差数
+1195   4                                      i = i + 2;    //已走的步数加2
+1196   4                              }       
+1197   3                      }
+1198   2                      else
+1199   2                      {
+1200   3                              if (fabs(F2) < fabs(F3))  //F2最小，用方式2
+1201   3                              {
+1202   4                                      yPositiveTurn(Length);       //向+y轴移动一步
+1203   4                                      yTemp = yTemp + Length;      
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 21  
+
+1204   4                                      F = F2;
+1205   4                                      i++;                    
+1206   4                              }
+1207   3                              else                   //F3最小，用方式3
+1208   3                              {
+1209   4                                      xPositiveTurn(Length);       //向+x轴移动一步
+1210   4                                      xTemp = xTemp + Length;
+1211   4                                      yPositiveTurn(Length);       //向+y轴移动一步
+1212   4                                      yTemp = yTemp + Length;  
+1213   4                                      F = F3;       //更新偏差数
+1214   4                                      i = i + 2;    //已走的步数加2
+1215   4                              }                       
+1216   3                      }               
+1217   2              }
+1218   1      }
+1219          //类似 第三象限 顺时针 圆弧插补子程序
+1220          void sub7(double x1, double y1, double x2, double y2)  //(x1, y1)-->(x2, y2)
+1221          {
+1222   1              //注意圆心坐标（a, b）已经在父程序中确定
+1223   1              
+1224   1              double xTemp = x1, yTemp = y1;  //定义动点(xTemp, yTemp), 初值为起始位置
+1225   1              double N;                       //定义N为起始位置到终点两个步进电机一共要走的步数�
+             -��定义每一步2拍，即精度为0.15毫米
+1226   1              double i = 0;                   //定义变量i，表示两个步进电机一经走了i步, 初始化为0
+1227   1              double F = 0;        //定义偏差数，即动点距离圆弧的差值，(偏差函数F= x^2+y^2-R^2), �
+             -��于开始时动点在圆弧上，故F初值为0
+1228   1              double F1, F2, F3;   //三种不同方式的进给，所求的偏差数（1：-x方向的进给，2：+y�
+             -��向的进给，3：-x和+y都进给）
+1229   1                      
+1230   1              N = (fabs(x2 - x1) + fabs(y2 - y1)) / Length;   //一步定为0.15毫米，共需要走N步。
+1231   1              
+1232   1              while (i < N)
+1233   1              {
+1234   2                      F1 = F - 2*Length*xTemp + Length*Length + 2*a*Length;  //如果要按-x方向进给，偏差数为F1
+1235   2                      F2 = F + 2*Length*yTemp + Length*Length - 2*b*Length;  //如果要按+y方向进给，偏差数为F2
+1236   2                      F3 = F - 2*Length*xTemp + 2*Length*yTemp + 2*a*Length - 2*b*Length + 2*Length*Length;
+1237   2              
+1238   2                      if (fabs(F1) < fabs(F2))
+1239   2                      {
+1240   3                              if (fabs(F1) < fabs(F3))  //即F1最小, 用方式1
+1241   3                              {
+1242   4                                      xReversalTurn(Length);  //向X轴负方向移动一步
+1243   4                                      xTemp = xTemp - Length;
+1244   4                                      F = F1;   //更新偏差数
+1245   4                                      i++;      //已走的步数加1
+1246   4                              }
+1247   3                              else                     //F3最小，用方式3
+1248   3                              {
+1249   4                                      xReversalTurn(Length);       //向X轴负方向移动一步
+1250   4                                      xTemp = xTemp - Length;
+1251   4                                      yPositiveTurn(Length);       //向y轴正方向移动一步
+1252   4                                      yTemp = yTemp + Length;    
+1253   4                                      F = F3;       //更新偏差数
+1254   4                                      i = i + 2;    //已走的步数加1
+1255   4                              }       
+1256   3                      }
+1257   2                      else
+1258   2                      {
+1259   3                              if (fabs(F2) < fabs(F3))  //F2最小，用方式2
+1260   3                              {
+1261   4                                      yPositiveTurn(Length);       //向y轴正方向移动一步
+1262   4                                      yTemp = yTemp + Length;   
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 22  
+
+1263   4                                      F = F2;
+1264   4                                      i++;                    
+1265   4                              }
+1266   3                              else                   //F3最小，用方式3
+1267   3                              {
+1268   4                                      xReversalTurn(Length);       //向X轴负方向移动一步
+1269   4                                      xTemp = xTemp - Length;
+1270   4                                      yPositiveTurn(Length);       //向y轴正方向移动一步
+1271   4                                      yTemp = yTemp + Length;    
+1272   4                                      F = F3;       //更新偏差数
+1273   4                                      i = i + 2;    //已走的步数加1
+1274   4                              }
+1275   3                              
+1276   3                      }               
+1277   2              }       
+1278   1      }
+1279          //类似 第四象限 顺时针 圆弧插补子程序
+1280          void sub8(double x1, double y1, double x2, double y2) //（x1，y1）---> (x2, y2)
+1281          {
+1282   1              //注意圆心坐标（a, b）已经在父程序中确定
+1283   1              
+1284   1              double xTemp = x1, yTemp = y1;  //定义动点(xTemp, yTemp), 初值为起始位置
+1285   1              double N;                       //定义N为起始位置到终点两个步进电机一共要走的步数�
+             -��定义每一步2拍，即精度为0.15毫米
+1286   1              double i = 0;                   //定义变量i，表示两个步进电机一经走了i步, 初始化为0
+1287   1              double F = 0;        //定义偏差数，即动点距离圆弧的差值，(偏差函数F= x^2+y^2-R^2), �
+             -��于开始时动点在圆弧上，故F初值为0
+1288   1              double F1, F2, F3;   //三种不同方式的进给，所求的偏差数（1：-x方向的进给，2：-y�
+             -��向的进给，3：-x和-y都进给）
+1289   1                      
+1290   1              N = (fabs(x2 - x1) + fabs(y2 - y1)) / Length;   //一步定为0.15毫米，共需要走N步。
+1291   1              
+1292   1              while (i < N)
+1293   1              {
+1294   2                      F1 = F - 2*Length*xTemp + Length*Length + 2*a*Length;  //如果要按-x方向进给，偏差数为F1
+1295   2                      F2 = F - 2*Length*yTemp + Length*Length + 2*b*Length;  //如果要按-y方向进给，偏差数为F2
+1296   2                      F3 = F - 2*Length*xTemp - 2*Length*yTemp + 2*a*Length + 2*b*Length + 2*Length*Length;
+1297   2              
+1298   2                      if (fabs(F1) < fabs(F2))
+1299   2                      {
+1300   3                              if (fabs(F1) < fabs(F3))  //即F1最小, 用方式1
+1301   3                              {
+1302   4                                      xReversalTurn(Length);  //向X轴负方向移动一步
+1303   4                                      xTemp = xTemp - Length;
+1304   4                                      F = F1;   //更新偏差数
+1305   4                                      i++;      //已走的步数加1
+1306   4                              }
+1307   3                              else                     //F3最小，用方式3
+1308   3                              {
+1309   4                                      xReversalTurn(Length);       //向X轴负方向移动一步
+1310   4                                      xTemp = xTemp - Length;
+1311   4                                      yReversalTurn(Length);       //向y轴负方向移动一步
+1312   4                                      yTemp = yTemp - Length;    
+1313   4                                      F = F3;       //更新偏差数
+1314   4                                      i = i + 2;    //已走的步数加2
+1315   4                              }       
+1316   3                      }
+1317   2                      else
+1318   2                      {
+1319   3                              if (fabs(F2) < fabs(F3))  //F2最小，用方式2
+1320   3                              {
+1321   4                                      yReversalTurn(Length);       //向y轴负方向移动一步
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 23  
+
+1322   4                                      yTemp = yTemp - Length;     
+1323   4                                      F = F2;
+1324   4                                      i++;                    
+1325   4                              }
+1326   3                              else                   //F3最小，用方式3
+1327   3                              {
+1328   4                                      xReversalTurn(Length);       //向X轴负方向移动一步
+1329   4                                      xTemp = xTemp - Length;
+1330   4                                      yReversalTurn(Length);       //向y轴负方向移动一步
+1331   4                                      yTemp = yTemp - Length;    
+1332   4                                      F = F3;       //更新偏差数
+1333   4                                      i = i + 2;    //已走的步数加2
+1334   4                              }
+1335   3                              
+1336   3                      }               
+1337   2              }       
+1338   1      }
+1339          
+1340          //顺时针圆弧插补(用的是最小偏差法)
+1341          void circularInterpolation_S(double X, double Y) //(X, Y)为终点坐标, (x0, y0)为起点坐标, （a，
+             -b）为圆心
+1342          {
+1343   1          //注意圆心（a, b）已经在全局变量中定义并在父程序中赋值
+1344   1              
+1345   1              double r;        //定义半径r，其值为起点到原心（a, b）的距离
+1346   1              
+1347   1              r = sqrt((x0-a)*(x0-a) + (y0-b)*(y0-b));  //求得半径
+1348   1              
+1349   1              //起点在第一象限（不包括x轴正半轴，包括y轴正半轴）
+1350   1              if (x0 >= a && y0 > b)   
+1351   1              {
+1352   2                      if (X > a && Y >= b)  //终点在第一象限（不包括y轴正半轴，包括x轴正半轴）
+1353   2                      {
+1354   3                              if (X >= x0)
+1355   3                              {               
+1356   4                                      if (X == x0 || Y >= y0 )
+1357   4                                      {
+1358   5                                              //printf("ERROR 1! The coordinate is wrong!");
+1359   5                                              return;
+1360   5                                      }
+1361   4                                      sub5(x0, y0, X, Y);
+1362   4                              }
+1363   3                              if (X < x0)
+1364   3                              {
+1365   4                                      if (Y <= y0)
+1366   4                                      {
+1367   5                                              //printf("ERROR 2! The coordinate is wrong!");
+1368   5                                              return;
+1369   5                                      }
+1370   4                                      sub5(x0, y0, (a+r), b);
+1371   4                                      sub8((a+r), b, a, (b-r));
+1372   4                                      sub7(a, (b-r), (a-r), b);
+1373   4                                      sub6((a-r), b, a, (b+r));
+1374   4                                      sub5(a, (b+r), X, Y);
+1375   4                              }               
+1376   3                      }
+1377   2                      if (X >= a && Y < b)  //终点在第四象限
+1378   2                      {
+1379   3                              sub5(x0, y0, (a+r), b);
+1380   3                              sub8((a+r), b, X, Y);
+1381   3                      }
+1382   2                      if (X < a && Y <= b)  //终点在第三象限
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 24  
+
+1383   2                      {
+1384   3                              sub5(x0, y0, (a+r), b);
+1385   3                              sub8((a+r), b, a, (b-r));
+1386   3                              sub7(a, (b-r), X, Y);
+1387   3                      }
+1388   2                      if (X <= a && Y > b)  //终点在第二象限
+1389   2                      {
+1390   3                              sub5(x0, y0, (a+r), b);
+1391   3                              sub8((a+r), b, a, (b-r));
+1392   3                              sub7(a, (b-r), (a-r), b);
+1393   3                              sub6((a-r), b, X, Y);
+1394   3                      }       
+1395   2              }
+1396   1              //起点在第二象限（不包括y轴正半轴，包括x轴负半轴）
+1397   1              if (x0 < a && y0 >= b)
+1398   1              {
+1399   2                      if (X <= a && Y > b) //终点在第二象限
+1400   2                      {
+1401   3                              if (Y >= y0)
+1402   3                              {
+1403   4                                      if (Y == y0 || X <= x0)
+1404   4                                      {
+1405   5                                              //printf("ERROR 3! The coordinate is wrong!");
+1406   5                                              return;
+1407   5                                      }
+1408   4                                      sub6(x0, y0, X, Y);
+1409   4                              }
+1410   3                              if (Y < y0)
+1411   3                              {
+1412   4                                      if (X >= x0)
+1413   4                                      {
+1414   5                                              //printf("ERROR 4! The coordinate is wrong!");
+1415   5                                              return;
+1416   5                                      }
+1417   4                                      sub6(x0, y0, a, (b+r));
+1418   4                                      sub5(a, (b+r), (a+r), b);
+1419   4                                      sub8((a+r), b, a, (b-r));
+1420   4                                      sub7(a, (b-r), (a-r), b);
+1421   4                                      sub6((a-r), b, X, Y);
+1422   4                              }
+1423   3                      }
+1424   2                      if (X > a && Y >= b)  //终点在第一象限
+1425   2                      {
+1426   3                              sub6(x0, y0, a, (b+r));
+1427   3                              sub5(a, (b+r), X, Y);
+1428   3                      }
+1429   2                      if (X >= a && Y < b)  //终点在第四象限
+1430   2                      {
+1431   3                              sub6(x0, y0, a, (b+r));
+1432   3                              sub5(a, (b+r), (a+r), b);
+1433   3                              sub8((a+r), b, X, Y);   
+1434   3                      }
+1435   2                      if (X < a && Y <= b)  //终点在第三象限
+1436   2                      {
+1437   3                              sub6(x0, y0, a, (b+r));
+1438   3                              sub5(a, (b+r), (a+r), b);
+1439   3                              sub8((a+r), b, a, (b-r));
+1440   3                              sub7(a, (b-r), X, Y);                   
+1441   3                      }               
+1442   2              }       
+1443   1              //起点在第三象限（不包括x轴负半轴，包括Y轴负半轴）
+1444   1              if (x0 <= a && y0 < b)
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 25  
+
+1445   1              {
+1446   2                      if (X < a && Y <= b)  //终点在第三象限
+1447   2                      {
+1448   3                              if (X <= x0)
+1449   3                              {
+1450   4                                      if (X == x0 || Y <= y0)
+1451   4                                      {
+1452   5                                              //printf("ERROR 5! The coordinate is wrong!");
+1453   5                                              return;
+1454   5                                      }
+1455   4                                      sub7(x0, y0, X, Y);                     
+1456   4                              }
+1457   3                              if (X > x0)
+1458   3                              {
+1459   4                                      if (Y >= y0)
+1460   4                                      {
+1461   5                                              //printf("ERROR 6! The coordinate is wrong!");
+1462   5                                              return;
+1463   5                                      }
+1464   4                                      sub7(x0, y0, (a-r), b);
+1465   4                                      sub6((a-r), b, a, (b+r));
+1466   4                                      sub5(a, (b+r), (a+r), b);
+1467   4                                      sub8((a+r), b, a, (b-r));
+1468   4                                      sub7(a, (b-r), X, Y);
+1469   4                              }
+1470   3                      }
+1471   2                      if (X <= a && Y > b)   //终点在第二象限
+1472   2                      {
+1473   3                              sub7(x0, y0, (a-r), b);
+1474   3                              sub6((a-r), b, X, Y);
+1475   3                      }
+1476   2                      if (X > a && Y >= b)   //终点在第一象限
+1477   2                      {
+1478   3                              sub7(x0, y0, (a-r), b);
+1479   3                              sub6((a-r), b, a, (b+r));
+1480   3                              sub5(a, (b+r), X, Y);
+1481   3                      }
+1482   2                      if (X >= a && Y < b)   //终点在第四象限
+1483   2                      {
+1484   3                              sub7(x0, y0, (a-r), b);
+1485   3                              sub6((a-r), b, a, (b+r));
+1486   3                              sub5(a, (b+r), (a+r), b);
+1487   3                              sub8((a+r), b, X, Y);
+1488   3                      }       
+1489   2              }
+1490   1              //起点在第四象限（不包括Y轴负半轴，包括x轴正半轴）
+1491   1              if (x0 > a && y0 <= b)
+1492   1              {
+1493   2                      if (X >= a && Y < b)  //终点在第四象限
+1494   2                      {
+1495   3                              if (Y <= y0)
+1496   3                              {
+1497   4                                      if (Y == y0 || X >= x0)
+1498   4                                      {
+1499   5                                              //printf("ERROR 7! The coordinate is wrong!");
+1500   5                                              return;
+1501   5                                      }
+1502   4                                      sub8(x0, y0, X, Y);
+1503   4                              }
+1504   3                              if (Y > y0)
+1505   3                              {
+1506   4                                      if (X <= x0)
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 26  
+
+1507   4                                      {
+1508   5                                              //printf("ERROR 8! The coordinate is wrong!");
+1509   5                                              return;
+1510   5                                      }
+1511   4                                      sub8(x0, y0, a, (b-r));
+1512   4                                      sub7(a, (b-r), (a-r), b);
+1513   4                                      sub6((a-r), b, a, (b+r));
+1514   4                                      sub5(a, (b+r), (a+r), b);
+1515   4                                      sub8((a+r), b, X, Y);
+1516   4                              }
+1517   3                      }
+1518   2                      if (X < a && Y <= b)  //终点在第三象限
+1519   2                      {
+1520   3                              sub8(x0, y0, a, (b-r));
+1521   3                              sub7(a, (b-r), X, Y);
+1522   3                      }
+1523   2                      if (X <= a && Y > b)  //终点在第二象限
+1524   2                      {
+1525   3                              sub8(x0, y0, a, (b-r));
+1526   3                              sub7(a, (b-r), (a-r), b);
+1527   3                              sub6((a-r), b, X, Y);
+1528   3                      }
+1529   2                      if (X > a && Y >= b)  //终点在第一象限
+1530   2                      {
+1531   3                              sub8(x0, y0, a, (b-r));
+1532   3                              sub7(a, (b-r), (a-r), b);
+1533   3                              sub6((a-r), b, a, (b+r));
+1534   3                              sub5(a, (b+r), X, Y);
+1535   3                      }               
+1536   2              }
+1537   1              x0 = X;    //更新起点位置
+1538   1              y0 = Y;
+1539   1      } 
+1540          
+1541          //接受G代码初始化
+1542          void initReceive()
+1543          {
+1544   1              //printf("Please sent one GCode!(Adding # at the end of the GCode!!)\n");
+1545   1              moveFlag = 0;   //取消运动标志。
+1546   1              printf("#");  //发送一个“#”表示可以接受数据。
+1547   1      }
+1548          //判断字符是不是数字字符
+1549          int isDigit(char temp)
+1550          {
+1551   1              switch (temp)
+1552   1              {
+1553   2                      case '0': return 1; break;
+1554   2                      case '1': return 1; break;
+1555   2                      case '2': return 1; break;
+1556   2                      case '3': return 1; break;
+1557   2                      case '4': return 1; break;
+1558   2                      case '5': return 1; break;
+1559   2                      case '6': return 1; break;
+1560   2                      case '7': return 1; break;
+1561   2                      case '8': return 1; break;
+1562   2                      case '9': return 1; break;
+1563   2                      default: return 0;
+1564   2              }
+1565   1              return 0;
+1566   1      }
+1567          //判断字符是不是命令字符
+1568          int isChar(char temp)
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 27  
+
+1569          {
+1570   1              switch (temp)
+1571   1              {
+1572   2                      case 'G': return 1; break;
+1573   2                      case 'M': return 1; break;
+1574   2                      case 'X': return 1; break;
+1575   2                      case 'Y': return 1; break;
+1576   2                      case 'F': return 1; break;
+1577   2                      case 'I': return 1; break;
+1578   2                      case 'J': return 1; break;
+1579   2                      default: return 0;
+1580   2              }
+1581   1              return 0;
+1582   1      }
+1583          
+1584          //读取G后面的数字字符保存到float型变量figure中，并且使i的下一个字符为G、M、X�
+             -��Y
+1585          void readNumber(unsigned char *gCode, unsigned int *i, double *figure)   
+1586          {
+1587   1              double num, power;   
+1588   1          int sign; 
+1589   1              
+1590   1              (*i)++;    //先自加一次，让i指向第一个数字字符
+1591   1              if (isChar(gCode[*i]) != 1 && gCode[*i] != '\0')
+1592   1              {
+1593   2                      sign = (gCode[*i] == '-')? -1:1;
+1594   2      
+1595   2                      if (gCode[*i] == '+' || gCode[*i] == '-')
+1596   2                              (*i)++;
+1597   2      
+1598   2                      for (num = 0; isDigit(gCode[*i]) == 1; (*i)++)
+1599   2                              num = 10.0 * num + (gCode[*i] - '0');
+1600   2      
+1601   2                      if (gCode[*i] == '.')
+1602   2                              (*i)++;
+1603   2      
+1604   2                      for (power = 1.0; isDigit(gCode[*i]) == 1; (*i)++)
+1605   2                      {
+1606   3                              num = 10.0 * num + (gCode[*i] - '0');
+1607   3                              power = power * 10;                     
+1608   3                      }
+1609   2      
+1610   2                      num = sign * num / power;
+1611   2                      *figure = num;
+1612   2                      
+1613   2                      while (isChar(gCode[*i]) != 1 && gCode[*i] != '\0' )
+1614   2                      {
+1615   3                              (*i)++;   //解决遇到空格的状态
+1616   3                      }
+1617   2                      (*i)--;  //保证i的下一个字符为G、M、X、Y或F
+1618   2              }
+1619   1              else
+1620   1              {
+1621   2                      //printf("ERROR! In the readNumber\n");
+1622   2                      return;
+1623   2              }
+1624   1      }
+1625          //接收G代码（注意最后一个字符必须接收到'#'，否则出现bug）
+1626          void receiveGCode(unsigned char *gCode)
+1627          {
+1628   1              unsigned int i = 0;        //循环变量
+1629   1              
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 28  
+
+1630   1              while(1)
+1631   1              {
+1632   2                      while (!RI);     //等待产生计算机发送完毕一个字符，产生中断信号
+1633   2                      RI = 0;          //消除中断信号
+1634   2                      gCode[i] = SBUF;
+1635   2                      if (gCode[i] == '#')  //如果检测到计算机发送完毕的信号，停止接收
+1636   2                      {
+1637   3                              break;
+1638   3                      }
+1639   2                      i++;
+1640   2              }       
+1641   1              gCode[i] = '\0';                 //字符串结束符
+1642   1              //if (i >= 49)
+1643   1              //      printf("Error! Low storage space!\n");
+1644   1              //else
+1645   1              //{ 
+1646   1                      //"成功信息"反馈显示到上位机
+1647   1              //      printf("The GCode has been sent successfully!\n");     //此函数需自己编写，在电脑上位机
+             -程序中显示
+1648   1              //      printf("Just received content is \n");
+1649   1              //      printf(gCode);
+1650   1              //      printf("\n\n");
+1651   1              //}
+1652   1      }
+1653          
+1654          //解释G代码
+1655          void explainGCode(unsigned char *gCode, unsigned int *GCommand, double *X, double *Y, double *I, double *J
+             -)
+1656          {
+1657   1              unsigned int i;
+1658   1              double figure;       //保存命令字符后面的数字
+1659   1              unsigned int num;   //用于保存figure的整型部分, 判断G命令和M命令的类型
+1660   1              unsigned char temp;          //用于临时保存命令字符
+1661   1              
+1662   1              for (i = 0; gCode[i] != '\0'; i++)
+1663   1              {
+1664   2                      temp = gCode[i];
+1665   2                      if (isChar(temp) != 1)
+1666   2                      {
+1667   3                              //printf("Error! In the explainGCode.\n");
+1668   3                              return;
+1669   3                      }
+1670   2                      readNumber(gCode, &i, &figure);  //读取G后面的数字保存到figure中，并使i的下一个字符�
+             -��G、M、X或Y
+1671   2                      num = (unsigned int)figure;      //类型转换
+1672   2                      switch (temp)
+1673   2                      {
+1674   3                              case 'G':
+1675   3                                              
+1676   3                                              switch(num)
+1677   3                                              {
+1678   4                                                      case 0: *GCommand = 0; moveFlag = 1; break;  //给G命令标志变量赋值（快速定位）
+1679   4                                                      case 1: *GCommand = 1; moveFlag = 1; break;  //直线插补
+1680   4                                                      case 2: *GCommand = 2; moveFlag = 1; break;  //顺时针圆弧插补 
+1681   4                                                      case 3: *GCommand = 3; moveFlag = 1; break;  //逆时针圆弧插补
+1682   4                                                      case 90: break;   //printf("Now working in Absolute size\n"); 
+1683   4                                                      case 21: break;   //printf("Now working in English unit\n");                    //注意此程序要
+             -改为公制编程
+1684   4                                                      default: break;  //printf("ERROR! Now the machine does not support the G gCode!\n");
+1685   4                                              }
+1686   3                                              break;
+1687   3                              case 'M':                                 //M命令为激光控制命令
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 29  
+
+1688   3                                              moveFlag = 0;  //取消运动标志
+1689   3                                              switch (num)
+1690   3                                              {
+1691   4                                                      case 5: Laser = 1; break;       //M05关闭激光 (此处为低电位有效)
+1692   4                                                      case 3: Laser = 0; break;       //M03打开激光
+1693   4                                                      case 2: break;   //printf("END\n");       //G02程序结束
+1694   4                                                      default: break; //printf("ERROR! Now the machine does not support the M GCode!\n");
+1695   4                                              }
+1696   3                                              break;
+1697   3                              case 'X':
+1698   3                                              *X = figure;    //设定x轴坐标
+1699   3                                              break;
+1700   3                              case 'Y':
+1701   3                                              *Y = figure;    //设定y轴坐标
+1702   3                                              break;
+1703   3                              case 'I':
+1704   3                                              *I = figure;    //设定圆弧起点到圆心的x轴增量
+1705   3                                              break;
+1706   3                              case 'J':
+1707   3                                              *J = figure;    //设定圆弧起点到圆心的y轴增量
+1708   3                                              break;
+1709   3                              case 'F':
+1710   3                                              moveFlag = 0;   //取消运动标志
+1711   3                                              Speed = num;    //设定速度（此版本为测试版本，速度不可控）
+1712   3                                              break;
+1713   3                              default: break;   //printf("ERROR!(Please debug the explainGCode completely!)\n");                                      
+1714   3                      }
+1715   2              }
+1716   1      }
+1717          
+1718          //执行G代码
+1719          void executeGCode(unsigned int GCommand, double X, double Y, double I, double J)
+1720          {
+1721   1      
+1722   1              //注意：激光的打开关闭，速度设定已经在解释G代码时完成, 即F命令，M命令已�
+             -�完成
+1723   1              
+1724   1              //为圆弧插补子程序服务（根据起点坐标（x0, y0）和增量I，J确定圆心（a, b））
+1725   1              
+1726   1              if (moveFlag == 1)   //需要运动
+1727   1              {
+1728   2                      a = x0 + I;
+1729   2                      b = y0 + J;
+1730   2              
+1731   2                      switch (GCommand)
+1732   2                      {
+1733   3                              case 0: quickPosition(X, Y); break;                //快速定位
+1734   3                              case 1: linearInterpolation(X, Y); break;          //直线插补
+1735   3                              case 2: circularInterpolation_S(X, Y); break;      //顺时针圆弧插补 
+1736   3                              case 3: circularInterpolation_N(X, Y); break;      //逆时针圆弧插补
+1737   3                              default: return;  //printf("The GCommand is Error!\n");
+1738   3                      }
+1739   2              }
+1740   1      }
+1741          
+1742          //主程序
+1743          void main()
+1744          {
+1745   1          idata unsigned char gCode[50];       //定义字符串数组用于临时保存从电脑接收的一行
+             -G代码
+1746   1              
+1747   1              idata unsigned int GCommand = 0;           //用来标志哪一种G命令（0: 快速定位， 1：直线
+C51 COMPILER V9.52.0.0   ____________________________FINAL_______                          10/09/2015 16:50:09 PAGE 30  
+
+             -插补， 2：顺时针圆弧插补， 3：逆时针圆弧插补）
+1748   1              idata unsigned int laserFlag = 0;          //用来标志激光状态（1：打开， 0：关闭）,初�
+             -�化为关闭
+1749   1              
+1750   1              idata double X, Y;                          //表示G代码中的坐标位置（即激光要移动的终�
+             -��）
+1751   1              idata double I, J;                                          //圆弧起点到圆心的增量坐标
+1752   1              
+1753   1              SerInit();  //串口初始化(循环检测的方法接受数据) 
+1754   1              Laser = 1;  //激光初始化关闭（低电位有效）
+1755   1              
+1756   1              while(1)
+1757   1              {
+1758   2                      initReceive();                         //接收G代码初始化
+1759   2                      receiveGCode(gCode);                   //接收G代码
+1760   2                      explainGCode(gCode, &GCommand, &X, &Y, &I, &J);     //解释G代码
+1761   2                      executeGCode(GCommand, X, Y, I, J);    //执行G代码
+1762   2              }
+1763   1      }
+1764          
+1765          
+
+
+MODULE INFORMATION:   STATIC OVERLAYABLE
+   CODE SIZE        =  25698    ----
+   CONSTANT SIZE    =      2    ----
+   XDATA SIZE       =   ----    ----
+   PDATA SIZE       =   ----    ----
+   DATA SIZE        =     28     542
+   IDATA SIZE       =   ----      70
+   BIT SIZE         =   ----    ----
+END OF MODULE INFORMATION.
+
+
+C51 COMPILATION COMPLETE.  0 WARNING(S),  0 ERROR(S)
