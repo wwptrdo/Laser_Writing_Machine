@@ -1,3 +1,10 @@
+/*
+ * author: wwptrdudu <1348351139@qq.com>
+ * github: https://github.com/wwptrdudu
+ * tg: @wwptrdudu
+ */
+
+
 #include <reg52.h>
 #include <math.h>
 

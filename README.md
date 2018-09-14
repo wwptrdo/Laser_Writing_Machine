@@ -57,10 +57,11 @@
 ![效果图2](https://github.com/WhisperHear/Laser_Writing_Machine/blob/master/图片展示/principle.png)
 
 
-# 其他说明：
-
-#### 如果出现问题请重新修改并编译源码，或者联系我：
-#### QQ: 1348351139
+# Contact me 
+#### If you have any questions, please contact me.
+#### tg: @wwptrdudu
+###### This link opens a chat with me.
+       https://t.me/wwptrdudu
 #### e-mail: 1348351139@qq.com
 
 
